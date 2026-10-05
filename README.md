@@ -1,6 +1,6 @@
 # StudentRPG
 
-A small console RPG in Kotlin/JVM. Play as a student, pass three classes, and manage health, mana, and mental state.
+A small console RPG in Kotlin/JVM. Play as a student, pass three classes, and manage health, and mental state.
 
 ## Run
 
