@@ -4,3 +4,6 @@ build/
 .idea/
 *.iml
 local.properties
+.compile-check/
+.gradle-agent/
+.gradle-agent-project/
