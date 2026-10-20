@@ -7,3 +7,6 @@ local.properties
 .compile-check/
 .gradle-agent/
 .gradle-agent-project/
+.gradle-validation/
+.verification/
+captures/
