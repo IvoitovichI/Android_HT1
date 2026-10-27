@@ -1,4 +1,4 @@
-plugins { kotlin("jvm") }
+﻿plugins { kotlin("jvm") }
 repositories { mavenCentral() }
 kotlin {
     jvmToolchain(21)
@@ -11,4 +11,15 @@ kotlin {
 java {
     sourceCompatibility = JavaVersion.VERSION_17
     targetCompatibility = JavaVersion.VERSION_17
+}
+
+val verification by sourceSets.creating {
+    kotlin.srcDir("../verification")
+    compileClasspath += sourceSets.main.get().output + configurations.runtimeClasspath.get()
+    runtimeClasspath += output + compileClasspath
+}
+val verifyCampus by tasks.registering(JavaExec::class) {
+    dependsOn("verificationClasses")
+    mainClass.set("CoreChecksKt")
+    classpath = sourceSets["verification"].runtimeClasspath
 }

@@ -1,96 +1,145 @@
-package campus
+﻿package campus
 
-import Exhaustion
-import Lesson
-import LessonCatalog
-import Student
+import kotlin.random.Random
 
-data class QuizProgress(val lessonIndex: Int, val questionIndex: Int = 0, val correct: Int = 0)
-
-data class CampusState(
-    val health: Int = 80,
-    val mana: Int = 60,
-    val mind: Int = 70,
-    val minutesLeft: Int = 180,
-    val completed: Set<String> = emptySet(),
-    val knowledge: Map<String, Int> = emptyMap(),
-    val quiz: QuizProgress? = null,
-    val message: String = "Pass all three classes before the semester ends.",
-    val finished: Boolean = false,
-    val won: Boolean = false
-)
-
-/** Synchronous HW1 rules: no console input, Android APIs, or UI state. */
-class CampusGame(val lessons: List<Lesson> = LessonCatalog.lessons) {
-    private var student = Student("Student")
-    var state = CampusState()
+class CampusGame(val lessons: List<Course> = CourseCatalog.courses,
+    initialState: CampusState = CampusState(), private val random: Random = Random.Default) {
+    var state = initialState
         private set
-
-    fun restart() { student = Student("Student"); state = CampusState() }
-
+    val question: ExamQuestion? get() = state.quiz?.let { lessons[it.lessonIndex].stages[it.stage][it.questionIndex] }
+    fun restart(days: Int = 24) { state = CampusState(semesterDays = days.coerceIn(12, 60)) }
     fun startLesson(index: Int) {
-        if (state.finished || state.quiz != null) return
-        val lesson = lessons.getOrNull(index) ?: return
-        if (lesson.title in state.completed) return
-        if (state.minutesLeft < 30) { state = state.copy(message = "A class requires 30 minutes."); return }
-        if (student.mana < lesson.manaCost) { state = state.copy(message = "Not enough mana. Drink coffee first."); return }
-        val focus = student.mind / 10 + student.mana / 10
-        student.changeStats(manaDelta = -lesson.manaCost, mindDelta = -lesson.difficulty * 4)
-        state = state.copy(minutesLeft = state.minutesLeft - 30)
-        if (focus < lesson.difficulty * 3) {
-            student.changeStats(healthDelta = -lesson.difficulty * 5)
-            finishAction("You could not focus. Rest before trying again.", true)
-        } else {
-            state = snapshot().copy(quiz = QuizProgress(index), message = "Three correct answers are needed to pass.")
+        if (blocked()) return
+        val course = lessons.getOrNull(index) ?: return
+        val stage = state.passes[course.id] ?: 0
+        if (stage >= course.requiredPasses) { announce("Все этапы этого предмета уже сданы."); return }
+        if ((state.knowledge[course.id] ?: 0) < course.requiredKnowledge(stage)) {
+            announce("Для этапа ${stage + 1} нужно ${course.requiredKnowledge(stage)} знаний. Загляните в библиотеку."); return
         }
+        if (!canSpend(120)) return
+        if (state.health <= 5 || state.mind < 16) { announce("Перед зачётом поешьте или отдохните: нужно >5 здоровья и ≥16 концентрации."); return }
+        state = state.copy(minutesLeft = state.minutesLeft - 120, health = state.health - 3, mind = state.mind - 12,
+            quiz = QuizProgress(index, stage), message = "Этап ${stage + 1}: ответьте верно минимум на 3 из 4 вопросов.")
+        rollHint()
     }
-
     fun answer(option: Int) {
+        val current = question ?: return
+        if (option !in 1..current.options.size) return
+        answerText(current.options[option - 1])
+    }
+    fun answerText(value: String) {
         val progress = state.quiz ?: return
-        if (option !in 1..4) return
-        val lesson = lessons[progress.lessonIndex]
-        val correct = progress.correct + if (option == lesson.quiz.questions[progress.questionIndex].correctOption) 1 else 0
+        val current = question ?: return
+        if (value.isBlank() && !progress.guaranteed) return
+        val right = progress.guaranteed || current.accepts(value)
+        val correct = progress.correct + if (right) 1 else 0
+        val feedback = (if (right) "Верно! " else "Правильный ответ: ${current.answer}. ") + current.explanation
         if (progress.questionIndex < 3) {
-            state = state.copy(quiz = progress.copy(questionIndex = progress.questionIndex + 1, correct = correct))
+            state = state.copy(quiz = progress.copy(questionIndex = progress.questionIndex + 1, correct = correct,
+                highlighted = false, eliminated = false, guaranteed = false))
+            announce(feedback); rollHint()
         } else {
-            if (correct >= 3) {
-                student.completedLessons += lesson.title
-                student.knowledge[lesson.subject] = (student.knowledge[lesson.subject] ?: 0) + lesson.difficulty * 10
-            }
-            state = state.copy(quiz = null)
-            finishAction(if (correct >= 3) "Class passed! $correct/4 correct." else "Quiz failed: $correct/4. Try again.", true)
+            val course = lessons[progress.lessonIndex]
+            val passed = correct >= 3
+            val completed = passed && progress.stage + 1 == course.requiredPasses
+            val reward = if (passed) 8 + (if (completed) 25 else 0) else 0
+            state = state.copy(quiz = null,
+                passes = if (passed) state.passes + (course.id to progress.stage + 1) else state.passes,
+                knowledge = if (passed) state.knowledge + (course.id to ((state.knowledge[course.id] ?: 0) + 4).coerceAtMost(60)) else state.knowledge,
+                coins = state.coins + reward, xp = state.xp + if (passed) 35 else 8)
+            val won = lessons.all { (state.passes[it.id] ?: 0) >= it.requiredPasses }
+            state = state.copy(won = won, finished = won)
+            announce(feedback + "\n" + when {
+                won -> "Семестр закрыт! Даже декан впечатлён."
+                passed -> "Этап сдан: $correct/4. +35 XP, +4 знания, +$reward монет."
+                else -> "Пока $correct/4. Этап можно пересдать после подготовки. +8 XP за опыт."
+            })
         }
     }
-
-    fun rest() = recover(20, 20, 0, 25, "Rest restored health and mental state.")
-    fun coffee() = recover(5, -8, 25, 0, "Coffee restored mana and cost 8 health.")
-
-    private fun recover(minutes: Int, health: Int, mana: Int, mind: Int, message: String) {
-        if (state.finished || state.quiz != null) return
-        if (state.minutesLeft < minutes) { state = state.copy(message = "Not enough time for this action."); return }
-        student.changeStats(health, mana, mind)
-        state = state.copy(minutesLeft = state.minutesLeft - minutes)
-        finishAction(message, false)
+    fun study(index: Int) {
+        if (blocked()) return
+        val course = lessons.getOrNull(index) ?: return
+        if (!canSpend(60)) return
+        if (state.mind < 10) { announce("Для чтения нужно хотя бы 10 концентрации. Отдохните."); return }
+        val old = state.knowledge[course.id] ?: 0
+        if (old >= 60) { announce("По этому предмету уже максимум знаний: 60."); return }
+        state = state.copy(minutesLeft = state.minutesLeft - 60, mind = state.mind - 6,
+            knowledge = state.knowledge + (course.id to (old + 12).coerceAtMost(60)), xp = state.xp + 12)
+        announce("Библиотека: +12 знаний по «${course.title}», +12 XP. Конспект доступен ниже. Знания иногда подсвечивают ответ.")
     }
-
-    private fun snapshot() = state.copy(
-        health = student.health, mana = student.mana, mind = student.mind,
-        completed = student.completedLessons.toSet(), knowledge = student.knowledge.toMap()
-    )
-
-    private fun finishAction(message: String, lesson: Boolean) {
-        val loss = Exhaustion.apply(student, lesson)
-        val alive = student.health > 0 && student.mind > 0
-        val won = alive && student.completedLessons.size == lessons.size
-        val finished = won || !alive || state.minutesLeft < 5
-        state = snapshot().copy(
-            finished = finished, won = won,
-            message = when {
-                won -> "Victory! The semester is complete."
-                !alive -> "Game over: you have run out of energy."
-                state.minutesLeft < 5 -> "Game over: time has run out."
-                else -> message + if (loss > 0) " Exhaustion: -$loss health and mental state." else ""
-            }
-        )
+    fun trick(kind: String) {
+        val progress = state.quiz ?: return
+        val current = question ?: return
+        val cost = when (kind) { "peek" -> 20; "fifty" -> 10; "dean" -> 30; else -> return }
+        if (progress.guaranteed || (kind == "peek" && progress.highlighted) ||
+            (kind == "fifty" && (current.isOpen || progress.eliminated || progress.highlighted))) return
+        if (state.mana < cost) { announce("Не хватает смекалки: нужно $cost."); return }
+        state = state.copy(mana = state.mana - cost, quiz = when (kind) {
+            "peek" -> progress.copy(highlighted = true)
+            "fifty" -> progress.copy(eliminated = true)
+            else -> progress.copy(guaranteed = true, highlighted = true)
+        })
+        announce(when (kind) {
+            "peek" -> "Сосед прикрыл ответ ладонью… слишком поздно. Правильный ответ открыт."
+            "fifty" -> "Призрак старшекурсника вычеркнул два неверных варианта."
+            else -> "Призыв деканата! Следующий ответ будет засчитан верно. Бюрократия сильнее магии."
+        })
+    }
+    fun rest() {
+        if (blocked() || !canSpend(60)) return
+        state = state.copy(minutesLeft = state.minutesLeft - 60,
+            health = (state.health + 10).coerceAtMost(100), mind = (state.mind + 30).coerceAtMost(100))
+        announce("Отдых: +10 здоровья, +30 концентрации. −60 минут.")
+    }
+    fun nextDay() {
+        if (blocked()) return
+        if (state.day >= state.semesterDays) {
+            state = state.copy(finished = true)
+            announce("Семестр закончился. Сдано ${state.passes.values.sum()} из ${lessons.sumOf { it.requiredPasses }} этапов. Новый семестр — новый шанс."); return
+        }
+        state = state.copy(day = state.day + 1, minutesLeft = DAY_MINUTES,
+            health = (state.health + 25).coerceAtMost(100), mind = (state.mind + 40).coerceAtMost(100), mana = (state.mana + 18).coerceAtMost(100))
+        announce("Новый день: сон восстановил +25 здоровья, +40 концентрации и +18 смекалки.")
+    }
+    fun work() {
+        if (blocked() || !canSpend(120)) return
+        if (state.health < 15 || state.mind < 20) { announce("На смену нужно ≥15 здоровья и ≥20 концентрации."); return }
+        state = state.copy(minutesLeft = state.minutesLeft - 120, health = state.health - 8,
+            mind = state.mind - 12, coins = state.coins + 45, xp = state.xp + 15)
+        val gift = state.inventory.values.sum() < 20 && random.nextInt(100) < 25
+        if (gift) state = state.copy(inventory = state.inventory + ("coffee" to ((state.inventory["coffee"] ?: 0) + 1)))
+        announce("Подработка курьером: +45 монет, +15 XP, −8 здоровья, −12 концентрации." + if (gift) " Бонус: кофе в рюкзаке!" else "")
+    }
+    fun buy(id: String) {
+        if (blocked()) return
+        val item = CampusEconomy.items.find { it.id == id } ?: return
+        if (state.coins < item.price) { announce("Недостаточно монет. Подработка приносит 45 монет за смену."); return }
+        if (state.inventory.values.sum() >= 20) { announce("В рюкзаке максимум 20 вещей. Используйте запасы."); return }
+        state = state.copy(coins = state.coins - item.price, inventory = state.inventory + (id to ((state.inventory[id] ?: 0) + 1)))
+        announce("В рюкзак добавлено: ${item.title}. −${item.price} монет.")
+    }
+    fun use(id: String) {
+        if (blocked() || !canSpend(5)) return
+        val item = CampusEconomy.items.find { it.id == id } ?: return
+        val count = state.inventory[id] ?: 0
+        if (count <= 0) return
+        state = state.copy(minutesLeft = state.minutesLeft - 5, health = (state.health + item.health).coerceIn(1, 100),
+            mana = (state.mana + item.mana).coerceIn(0, 100), mind = (state.mind + item.mind).coerceIn(0, 100),
+            inventory = if (count == 1) state.inventory - id else state.inventory + (id to count - 1))
+        announce("${item.title}: ${item.description}. −5 минут.")
+    }
+    private fun blocked() = state.finished || state.quiz != null
+    private fun canSpend(minutes: Int): Boolean {
+        if (state.minutesLeft >= minutes) return true
+        announce("Сегодня не хватает времени: нужно $minutes минут. Завершите день в кампусе."); return false
+    }
+    private fun rollHint() {
+        val progress = state.quiz ?: return
+        val knowledge = state.knowledge[lessons[progress.lessonIndex].id] ?: 0
+        val chance = (knowledge * 0.7).toInt().coerceAtMost(40)
+        state = state.copy(quiz = progress.copy(highlighted = random.nextInt(100) < chance))
+    }
+    private fun announce(message: String) {
+        state = state.copy(message = message, journal = (listOf("День ${state.day}: $message") + state.journal).take(40))
     }
 }

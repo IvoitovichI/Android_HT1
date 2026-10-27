@@ -11,7 +11,8 @@ try {
     New-Item -ItemType Directory -Force '.verification' | Out-Null
     $sources = @('Character', 'Student', 'Lesson', 'Question', 'Quiz', 'LessonCatalog', 'Exhaustion') |
         ForEach-Object { "src/main/kotlin/$_.kt" }
-    $sources += 'game-core/src/main/kotlin/campus/CampusGame.kt', 'verification/CoreChecks.kt'
+    $sources += (Get-ChildItem 'game-core/src/main/kotlin/campus/*.kt').FullName
+    $sources += 'verification/CoreChecks.kt'
     & $java -cp "$compilerLib\*" org.jetbrains.kotlin.cli.jvm.K2JVMCompiler -kotlin-home $KotlinHome -jvm-target 17 -d '.verification/core.jar' @sources
     if ($LASTEXITCODE -ne 0) { throw 'Kotlin compilation failed.' }
     & $java -cp ".verification/core.jar;$compilerLib\kotlin-stdlib.jar" CoreChecksKt

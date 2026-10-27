@@ -1,62 +1,92 @@
-﻿# StudentRPG
+# StudentRPG / Campus Quest
 
-A small Android game built with Kotlin, Jetpack Compose, and Material 3. Complete three classes within 180 in-game minutes while managing health, mana, and mental state.
+Campus Quest is a student-life RPG for Android, built with Kotlin, Jetpack Compose, and Material 3. Complete a semester by balancing exams, library study, rest, and part-time work. Each day gives you a limited amount of time, so every activity competes for the same resources.
 
 ## Features
 
-- Search classes by title or subject and filter out completed classes.
-- Attend classes and answer multiple-choice quizzes. Each quiz has four questions; three correct answers are required to pass.
-- Track semester progress, knowledge, and character stats.
-- Rest to restore health and mental state, or drink coffee to recover mana at the cost of health.
-- Start a new semester with a confirmation prompt.
-- Keep game progress during screen rotation through a ViewModel, with search, filter, and answer selection restored through Compose state.
+- Four screens: Campus, Courses, Library, and Market.
+- Configurable semesters lasting 12-60 days, with 360 in-game minutes per day.
+- Seven courses, 24 exam stages, and 96 multiple-choice and typed-answer questions.
+- Library notes and course knowledge that unlock later exam stages and can reveal answers.
+- Three special exam tricks powered by the student's smarts resource.
+- Health, concentration, XP, levels, and an activity journal.
+- Part-time jobs, coins, food, drinks, and a consumable inventory.
+- A Warhammer 40,000 elective with lore questions and a dedicated illustration.
+- Game progress, navigation, search filters, and answer input retained across Activity recreation, including screen rotation.
+
+Android saved-state restoration is supported. A permanent save slot for arbitrary cold launches is not implemented.
 
 ## Screenshots
 
-| Semester overview | Class quiz |
-| --- | --- |
-| <img src="docs/screenshots/1.png" alt="Semester overview with character stats, recovery actions, search, and class schedule" width="300"> | <img src="docs/screenshots/2.png" alt="Algorithms quiz with a question and four answer options" width="300"> |
+[View project screenshots](docs/screenshots/). These images show an earlier version of the interface, before the RPG expansion.
 
-## Running
+## Requirements
 
-### Requirements
+- JDK 21.
+- Android SDK Platform 36 and Android SDK Platform-Tools.
+- An Android 8.0 (API 26) or newer device or emulator.
+- Android Studio for the IDE-based workflow.
 
-- Android Studio with support for the project's Android Gradle plugin.
-- JDK 21 (the Gradle daemon configuration uses JetBrains JDK 21).
-- Android SDK Platform 36.
-- An emulator or Android device running Android 8.0 (API 26) or later.
-- Internet access for the initial Gradle sync and dependency downloads.
+The Gradle wrapper is included. The first build requires internet access to download the Gradle distribution, dependencies, and any required toolchain.
 
-### Android Studio
+## Run in Android Studio
 
 1. Open the repository root in Android Studio.
-2. Install Android SDK Platform 36 through **SDK Manager** and configure the Gradle JVM to use JDK 21.
-3. Allow Gradle sync to finish.
-4. Start an emulator or connect a device with USB debugging enabled.
-5. Select the **app** run configuration and click **Run**. If needed, create an **Android App** configuration for the **app** module.
+2. Install Android SDK Platform 36 through SDK Manager if needed.
+3. Set the Gradle JDK to JDK 21 and let Gradle sync finish.
+4. Start an emulator or connect a device with USB debugging enabled. Accept its debugging authorization prompt if shown.
+5. Select the `app` run configuration and click **Run**.
 
-### Command line
+## Build and run from PowerShell
 
-Configure `JAVA_HOME` to point to your JDK 21 installation and set `sdk.dir` in the untracked `local.properties` file to your Android SDK path. Run these commands from the repository root in PowerShell:
+Run these commands from the repository root. Replace the example JDK and SDK paths with your local installation paths.
+
+```powershell
+$env:JAVA_HOME='C:\path\to\jdk-21'
+```
+
+Create or update the local `local.properties` file with your Android SDK path, using forward slashes:
+
+```properties
+sdk.dir=C:/path/to/Android/Sdk
+```
+
+Build the debug APK:
 
 ```powershell
 .\gradlew.bat :app:assembleDebug
-.\gradlew.bat :app:installDebug
 ```
 
-The install command requires a running emulator or connected device. Open **StudentRPG** on the device after installation. The debug APK is generated at `app/build/outputs/apk/debug/app-debug.apk`.
+The APK is generated at `app/build/outputs/apk/debug/app-debug.apk`.
 
-On macOS or Linux, use `./gradlew` instead of `.\gradlew.bat`.
-
-## Project structure
-
-- `app/` - Android application, Compose interface, and ViewModel.
-- `game-core/` - Shared game models and Android-independent game logic.
-- `src/main/kotlin/` - Original console game and shared model sources.
-- `docs/screenshots/` - Application screenshots.
-
-The original console version is also available:
+With an emulator running or an authorized device connected, install and launch the app:
 
 ```powershell
-.\gradlew.bat run
+.\gradlew.bat :app:installDebug
+& 'C:\path\to\Android\Sdk\platform-tools\adb.exe' shell am start -n com.studentrpg.campus/.MainActivity
+```
+
+## Verification
+
+Run the game-rule checks, including a complete simulated semester, and Android static analysis:
+
+```powershell
+.\gradlew.bat :game-core:verifyCampus
+.\gradlew.bat :app:lintDebug
+```
+
+Run Android regression tests with an authorized device or emulator connected:
+
+```powershell
+.\gradlew.bat :app:connectedDebugAndroidTest
+```
+
+These tests cover navigation, Activity recreation, answer input, gameplay actions, and saved-state serialization.
+
+## Console version
+
+The original console game is also available:
+
+```powershell
+.\gradlew.bat run --console=plain
 ```
