@@ -7,7 +7,7 @@ import java.io.ByteArrayOutputStream
 import java.io.ObjectInputStream
 import java.io.ObjectOutputStream
 
-/** Android saved-state adapter. Keeps the existing key and serialized format. */
+
 internal class SemesterSavedState(private val handle: SavedStateHandle) {
     fun restore(): CampusState? = handle.get<ByteArray>(KEY)?.let { bytes ->
         runCatching {

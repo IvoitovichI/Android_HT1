@@ -2,14 +2,24 @@ package com.studentrpg.campus
 
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import org.junit.Before
+import androidx.lifecycle.ViewModelProvider
 import org.junit.Rule
 import org.junit.Test
 
 class CampusRecreationTest {
     @get:Rule val compose = createAndroidComposeRule<MainActivity>()
 
+    @Before fun resetPersistedSemester() {
+        compose.waitUntil(15000) { compose.onAllNodesWithTag("tab_campus").fetchSemanticsNodes().isNotEmpty() }
+        compose.runOnUiThread { ViewModelProvider(compose.activity)[CampusViewModel::class.java].restart(24) }
+        compose.waitUntil(15000) {
+            ViewModelProvider(compose.activity)[CampusViewModel::class.java].state.value == campus.CampusState()
+        }
+    }
+
     @Test fun selectedTabFollowsDestinationAfterNavigationRecreationAndBack() {
-        val routes = listOf("campus", "courses", "library", "market")
+        val routes = listOf("campus", "courses", "library", "market", "plans")
         fun assertOnlySelected(route: String) {
             routes.forEach { candidate ->
                 if (candidate == route) compose.onNodeWithTag("tab_$candidate").assertIsSelected()

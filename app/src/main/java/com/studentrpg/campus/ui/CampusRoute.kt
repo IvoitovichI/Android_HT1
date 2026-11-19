@@ -13,12 +13,16 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.navigation.NavType
+import androidx.navigation.navArgument
 import androidx.navigation.NavController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.studentrpg.campus.R
 import com.studentrpg.campus.CampusViewModel
+import com.studentrpg.campus.PlansViewModel
+import com.studentrpg.campus.PlanEditorViewModel
 import com.studentrpg.campus.ui.components.*
 import com.studentrpg.campus.ui.navigation.*
 import com.studentrpg.campus.ui.screens.*
@@ -26,8 +30,21 @@ import com.studentrpg.campus.ui.screens.*
 @Composable
 fun CampusRoute(viewModel: CampusViewModel = viewModel()) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val ready by viewModel.ready.collectAsStateWithLifecycle()
+    val storageError by viewModel.storageError.collectAsStateWithLifecycle()
+    if (!ready) {
+        Column(Modifier.fillMaxSize().padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center) {
+            if (storageError == null) CircularProgressIndicator()
+            else {
+                Text(storageError.orEmpty())
+                Button(viewModel::load) { Text("Повторить загрузку") }
+            }
+        }
+        return
+    }
+    val plansViewModel: PlansViewModel = viewModel()
     val nav = rememberNavController()
-    // Observe the actual destination, including system Back and state restoration.
     var currentRoute by remember(nav) { mutableStateOf(nav.currentDestination?.route) }
     DisposableEffect(nav) {
         val listener = NavController.OnDestinationChangedListener { _, destination, _ ->
@@ -64,7 +81,7 @@ fun CampusRoute(viewModel: CampusViewModel = viewModel()) {
         bottomBar = {
             NavigationBar {
                 destinations.forEach { destination ->
-                    NavigationBarItem(selected = currentRoute == destination.route,
+                    NavigationBarItem(selected = currentRoute == destination.route || (destination.route == "plans" && currentRoute?.startsWith("plans/") == true),
                         modifier = Modifier.testTag("tab_${destination.route}"),
                         onClick = { nav.openTab(destination.route) }, icon = { Icon(painterResource(destination.icon), null, Modifier.size(24.dp)) },
                         label = { Text(destination.label, maxLines = 1) })
@@ -80,8 +97,35 @@ fun CampusRoute(viewModel: CampusViewModel = viewModel()) {
             composable("courses") { CoursesScreen(state, viewModel.lessons, viewModel::startLesson) }
             composable("library") { LibraryScreen(state, viewModel.lessons, viewModel::study) }
             composable("market") { MarketScreen(state, viewModel::buy, viewModel::work, viewModel::use) }
+            composable("plans") {
+                val plans by plansViewModel.state.collectAsStateWithLifecycle()
+                PlansListScreen(plans, { nav.navigate("plans/new") }, { nav.navigate("plans/$it") }, plansViewModel::dismissMessage)
+            }
+            composable("plans/new") {
+                val editor: PlanEditorViewModel = viewModel()
+                val form by editor.state.collectAsStateWithLifecycle()
+                LaunchedEffect(form.saved) { if (form.saved) { plansViewModel.saved(); nav.popBackStack() } }
+                PlanEditorScreen(form, editor::title, editor::description, editor::target, editor::save, { nav.popBackStack() })
+            }
+            composable("plans/{id}", arguments = listOf(navArgument("id") { type = NavType.LongType })) { entry ->
+                val id = entry.arguments!!.getLong("id")
+                val plans by plansViewModel.state.collectAsStateWithLifecycle()
+                PlanDetailScreen(id, plans, { nav.popBackStack() }, { nav.navigate("plans/$id/edit") },
+                    { plansViewModel.act(id, it) }, { plansViewModel.delete(id) }, plansViewModel::dismissMessage)
+            }
+            composable("plans/{id}/edit", arguments = listOf(navArgument("id") { type = NavType.LongType })) {
+                val editor: PlanEditorViewModel = viewModel()
+                val form by editor.state.collectAsStateWithLifecycle()
+                LaunchedEffect(form.saved) { if (form.saved) { plansViewModel.saved(); nav.popBackStack() } }
+                PlanEditorScreen(form, editor::title, editor::description, editor::target, editor::save, { nav.popBackStack() })
+            }
         }
     }
+    if (storageError != null) AlertDialog(
+        onDismissRequest = viewModel::dismissStorageError,
+        title = { Text("Ошибка сохранения") }, text = { Text(storageError.orEmpty()) },
+        confirmButton = { TextButton(viewModel::dismissStorageError) { Text("Понятно") } }
+    )
     state.quiz?.let { progress ->
         val course = viewModel.lessons[progress.lessonIndex]
         QuizDialog(state, course, progress, viewModel::answer, viewModel::trick)

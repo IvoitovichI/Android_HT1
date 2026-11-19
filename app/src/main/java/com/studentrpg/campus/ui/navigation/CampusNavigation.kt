@@ -9,10 +9,11 @@ internal val destinations = listOf(
     Destination("campus", "Кампус", R.drawable.ic_campus),
     Destination("courses", "Предметы", R.drawable.ic_book),
     Destination("library", "Библиотека", R.drawable.ic_library),
-    Destination("market", "Рынок", R.drawable.ic_shop)
+    Destination("market", "Рынок", R.drawable.ic_shop),
+    Destination("plans", "Планы", R.drawable.ic_book)
 )
 
-/** Use the same stack rules for dashboard shortcuts and bottom navigation. */
+
 internal fun NavHostController.openTab(route: String) {
     if (currentDestination?.route == route) return
     navigate(route) {

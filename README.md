@@ -4,7 +4,9 @@ Campus Quest is a student-life RPG for Android, built with Kotlin, Jetpack Compo
 
 ## Features
 
-- Four screens: Campus, Courses, Library, and Market.
+- Five tabs: Campus, Courses, Library, Market, and Plans.
+- Custom study plans with create/edit forms, detail screens, validation, and confirmed deletion.
+- Persistent plan workflows: start, record or undo steps, complete, reopen, and review dated history and progress statistics.
 - Configurable semesters lasting 12-60 days, with 360 in-game minutes per day.
 - Seven courses, 24 exam stages, and 96 multiple-choice and typed-answer questions.
 - Library notes and course knowledge that unlock later exam stages and can reveal answers.
@@ -14,7 +16,7 @@ Campus Quest is a student-life RPG for Android, built with Kotlin, Jetpack Compo
 - A Warhammer 40,000 elective with lore questions and a dedicated illustration.
 - Game progress, navigation, search filters, and answer input retained across Activity recreation, including screen rotation.
 
-Android saved-state restoration is supported. A permanent save slot for arbitrary cold launches is not implemented.
+Room stores study plans, their activity history, and the full semester snapshot across app restarts. ViewModels expose StateFlow collected with lifecycle awareness; unsaved form input also uses SavedStateHandle.
 
 ## Screenshots
 
@@ -73,6 +75,7 @@ Run the game-rule checks, including a complete simulated semester, and Android s
 ```powershell
 .\gradlew.bat :game-core:verifyCampus
 .\gradlew.bat :app:lintDebug
+.\gradlew.bat :app:testDebugUnitTest
 ```
 
 Run Android regression tests with an authorized device or emulator connected:
@@ -81,7 +84,7 @@ Run Android regression tests with an authorized device or emulator connected:
 .\gradlew.bat :app:connectedDebugAndroidTest
 ```
 
-These tests cover navigation, Activity recreation, answer input, gameplay actions, and saved-state serialization.
+JVM tests use Robolectric and a file-backed Room database to cover CRUD, persistence after reopening, workflow guards, history, Flow updates, concurrent steps, and semester saves. Android tests cover navigation, Activity recreation, answer input, gameplay actions, plan forms, workflow, and deletion. Android tests require an authorized connected device.
 
 ## Console version
 
